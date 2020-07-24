@@ -1,0 +1,198 @@
+.\" Copyright (c) 2017
+.\"		Netflix Inc.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.\" $FreeBSD$
+.\"
+.Dd Oct 17, 2017
+.Dt libbbparse 3
+.Os
+.Sh NAME
+.Nm libbbparse ,
+.Nm bbr_init_fd ,
+.Nm bbr_init_file ,
+.Nm bbr_fini ,
+.Nm bbr_get_next ,
+.Nm bbr_get_stackname ,
+.Nm bbr_get_tlh
+.Nd Parse a PCAPng file with black box records
+.Sh SYNOPSIS
+.In bbparse.h
+.Ft void *
+.Fn bbr_init_fd "int fd" "int interactive"
+.Ft void *
+.Fn bbr_init_file "const char *filename" "int interactive"
+.Ft void
+.Fn bbr_fini "void *ctx"
+.Ft int
+.Fn bbr_get_next "void *ctx" "const struct tcp_log_buffer **tlb" "const struct tcphdr **th"
+.Ft const char *
+.Fn bbr_get_stackname "void *ctx" "uint8_t stack_id"
+.Ft const struct tcp_log_header *
+.Fn bbr_get_tlh "void *ctx"
+.Sh DESCRIPTION
+This library parses a PCAPng file which contains black box records, such as the
+PCAPng files produced by the
+.Xr tcplog_dumper 1
+utility.
+.Pp
+A program initiates parsing by calling the
+.Fn bbr_init_fd
+or
+.Fn bbr_init_file
+functions.
+The file should be a PCAPng file, optionally compressed with the XZ encoding.
+If the file is compressed with the XZ encoding, the library will attempt to
+decompress it before reading it.
+If the file is opened successfully, the
+.Fn bbr_init_fd
+or
+.Fn bbr_init_file
+function will return a pointer to a parsing context.
+The program should use this as the
+.Fa ctx
+argument for calls to other functions in the library.
+.Pp
+Once a program has obtained a parsing context, it can use the
+.Fn bbr_get_next
+function to obtain the next black box record in the file.
+The
+.Fa ctx
+argument is a pointer to a parsing context.
+The library will update the
+.Fa tlb
+and
+.Fa th
+arguments with pointers to the next (struct tcp_log_buffer) in the file and the
+associated TCP header, if any.
+.Pp
+The
+.Fn bbr_get_stackname
+function returns the name associated with a stack ID in the file currently
+being parsed.
+.Pp
+The
+.Fn bbr_get_tlh
+function returns the current log header associated with the parsing context.
+.Pp
+When the program is finished with a file, it should call the
+.Fn bbr_fini
+function to close the file and/or release resources used by the library.
+.Pp
+The
+.Fa interactive
+argument to the
+.Fn bbr_init_fd
+or
+.Fn bbr_init_file
+function controls the way the library handles errors and warnings.
+If the
+.Fa interactive
+argument is non-zero, the library will call
+.Xr exit 3
+or
+.Xr err 3
+for errors, and will print warnings to stderr.
+If the
+.Fa interactive
+argument is zero, the library will suppress warnings and signal errors through
+return values.
+.Sh RETURN VALUES
+The
+.Fn bbr_init_fd
+and
+.Fn bbr_init_file
+functions return a pointer to a parsing context.
+If the
+.Fa interactive
+argument is non-zero, they always succeed.
+(If they would fail, they print an error and call
+.Xr exit 3 . )
+If the
+.Fa interactive
+argument is zero, they return NULL on failure.
+.Pp
+The
+.Fn bbr_get_next
+function returns 0 on success or 1 if it has reached the end of the file.
+If the context was created with the
+.Fa interactive
+argument set to zero, the
+.Fn bbr_get_next
+function will return -1 if it has encountered a fatal error.
+.Pp
+The
+.Fn bbr_get_stackname
+function returns the name associated with the stack ID.
+If the stack ID is unrecognized, the function returns the string "unknown".
+Note that the stack name can change on any call to
+.Fn bbr_get_next .
+(Primarily, this would occur if multiple files were concatenated together.)
+Therfore, programs should not cache the return value of
+.Fn bbr_get_tlh
+across calls to
+.Fn bbr_get_next .
+.Pp
+The
+.Fn bbr_get_tlh
+function returns the current log header associated with the parsing context.
+Note that the log header can change on any call to
+.Fn bbr_get_next .
+Therfore, programs should not cache the return value of
+.Fn bbr_get_tlh
+across calls to
+.Fn bbr_get_next .
+.Sh EXAMPLES
+To parse a file:
+.Bd -literal -offset indent
+#include <bbparse.h>
+
+void
+parsefile(cont char *filename)
+{
+	struct tcp_log_buffer *tlb;
+	struct tcphdr *th;
+	void *ctx;
+
+	ctx = bbr_init_file(filename, 1);
+	while(bbr_get_next(ctx, &lbufp, &th) == 0) {
+		/* Parse lbufp and th */
+	}
+	bbr_fini(ctx);
+}
+.Ed
+.Sh SEE ALSO
+.Xr tcplog_dumper 1 ,
+.Xr xz 1 ,
+.Xr err 3 ,
+.Xr exit 3
+.Sh BUGS
+In interactive mode, the library will declare a fatal error and call
+.Xr exit 3
+or
+.Xr err 3
+when it encounters many errors parsing a file.
+In non-interactive mode, the library will signal all errors using the same
+return code.
+Instead, it should probably return meaningful errors and let the calling program
+determine the appropriate way to handle them.
