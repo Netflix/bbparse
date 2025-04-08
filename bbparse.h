@@ -78,7 +78,6 @@ struct tcp_log_buffer_v8
 	uint8_t		_pad[3];	/* Padding */
 	/* Per-stack info */
 	union tcp_log_stackspecific tlb_stackinfo;
-#define	tlb_rack	tlb_stackinfo.u_rack
 
 	/* The packet */
 	uint32_t	tlb_len;	/* The packet's data length */
