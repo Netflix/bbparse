@@ -1,9 +1,7 @@
 #ifndef __test_dump_lib_h__
 #define	__test_dump_lib_h__	1
 /*-
- * Copyright (c) 2017
- *	Netflix Inc.
- *      All rights reserved.
+ * Copyright (c) 2017 Netflix, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
